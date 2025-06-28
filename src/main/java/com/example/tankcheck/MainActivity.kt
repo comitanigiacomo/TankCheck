@@ -23,6 +23,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -33,6 +34,8 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.tankcheck.ui.theme.TankCheckTheme
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.ktx.auth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.FirebaseDatabase
@@ -41,11 +44,11 @@ import com.google.firebase.database.ktx.database
 import com.google.firebase.ktx.Firebase
 
 class MainActivity : ComponentActivity() {
-    private val database = Firebase.database
-    private val statusRef = database.getReference("containerStatus")
+    private lateinit var auth: FirebaseAuth
+    private lateinit var database: FirebaseDatabase
+    private lateinit var statusRef: com.google.firebase.database.DatabaseReference
 
     override fun onCreate(savedInstanceState: Bundle?) {
-
         Thread.setDefaultUncaughtExceptionHandler { _, e ->
             Log.e("CRASH", "Crash dell'app", e)
             finish()
@@ -53,11 +56,31 @@ class MainActivity : ComponentActivity() {
 
         super.onCreate(savedInstanceState)
 
+        auth = Firebase.auth
+        database = Firebase.database
+        statusRef = database.getReference("containerStatus")
+
         createNotificationChannel()
         startService(Intent(this, StatusBarService::class.java))
 
         enableEdgeToEdge()
 
+        signInAnonymously()
+    }
+
+    private fun signInAnonymously() {
+        auth.signInAnonymously()
+            .addOnCompleteListener(this) { task ->
+                if (task.isSuccessful) {
+                    Log.d("AUTH", "signInAnonymously:success")
+                    proceedAfterAuth()
+                } else {
+                    Log.w("AUTH", "signInAnonymously:failure", task.exception)
+                }
+            }
+    }
+
+    private fun proceedAfterAuth() {
         if (intent?.action != Intent.ACTION_MAIN) {
             showStatusChangeUI()
         } else {
@@ -79,11 +102,11 @@ class MainActivity : ComponentActivity() {
             val channel = NotificationChannel(
                 "container_channel",
                 "Stato Contenitore",
-                NotificationManager.IMPORTANCE_DEFAULT // Cambiato da HIGH a DEFAULT
+                NotificationManager.IMPORTANCE_DEFAULT
             ).apply {
                 description = "Mostra lo stato del contenitore"
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-                enableVibration(false) // Disabilitato temporaneamente
+                enableVibration(false)
             }
 
             val manager = getSystemService(NotificationManager::class.java)
@@ -134,9 +157,19 @@ fun AppContent(
     val statusRef = database.getReference("containerStatus")
 
     var isFull by remember { mutableStateOf(false) }
+    var isAuthenticated by remember { mutableStateOf(false) }
 
-    // Listener per gli aggiornamenti del database
-    DisposableEffect(Unit) {
+    LaunchedEffect(Unit) {
+        Firebase.auth.addAuthStateListener { auth ->
+            isAuthenticated = auth.currentUser != null
+        }
+    }
+
+    DisposableEffect(isAuthenticated) {
+        if (!isAuthenticated) {
+            return@DisposableEffect onDispose {}
+        }
+
         val valueEventListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 snapshot.getValue(Boolean::class.java)?.let { status ->
@@ -145,7 +178,7 @@ fun AppContent(
             }
 
             override fun onCancelled(error: DatabaseError) {
-                // Gestisci l'errore
+                Log.e("FIREBASE", "Database error", error.toException())
             }
         }
 
@@ -161,31 +194,35 @@ fun AppContent(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
-        Icon(
-            painter = painterResource(
-                if (isFull) R.drawable.baseline_air_24
-                else R.drawable.baseline_air_24
-            ),
-            contentDescription = "Stato contenitore",
-            modifier = Modifier.size(64.dp)
-        )
+        if (!isAuthenticated) {
+            Text("Autenticazione in corso...")
+        } else {
+            Icon(
+                painter = painterResource(
+                    if (isFull) R.drawable.baseline_air_24
+                    else R.drawable.baseline_air_24
+                ),
+                contentDescription = "Stato contenitore",
+                modifier = Modifier.size(64.dp)
+            )
 
-        Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(24.dp))
 
-        Button(
-            onClick = {
-                onStatusChange(!isFull)
+            Button(
+                onClick = {
+                    onStatusChange(!isFull)
+                }
+            ) {
+                Text(if (isFull) "Segna come VUOTO" else "Segna come PIENO")
             }
-        ) {
-            Text(if (isFull) "Segna come VUOTO" else "Segna come PIENO")
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            Text(
+                text = "Stato attuale: ${if (isFull) "PIENO" else "VUOTO"}",
+                modifier = Modifier.padding(8.dp)
+            )
         }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "Stato attuale: ${if (isFull) "PIENO" else "VUOTO"}",
-            modifier = Modifier.padding(8.dp)
-        )
     }
 }
 
@@ -197,9 +234,20 @@ fun StatusChangeScreen(
     val statusRef = database.getReference("containerStatus")
 
     var isFull by remember { mutableStateOf(false) }
+    var isAuthenticated by remember { mutableStateOf(false) }
 
-    // Listener per gli aggiornamenti del database
-    DisposableEffect(Unit) {
+    LaunchedEffect(Unit) {
+        Firebase.auth.addAuthStateListener { auth ->
+            isAuthenticated = auth.currentUser != null
+        }
+    }
+
+
+    DisposableEffect(isAuthenticated) {
+        if (!isAuthenticated) {
+            return@DisposableEffect onDispose {}
+        }
+
         val valueEventListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 snapshot.getValue(Boolean::class.java)?.let { status ->
@@ -208,7 +256,7 @@ fun StatusChangeScreen(
             }
 
             override fun onCancelled(error: DatabaseError) {
-                // Gestisci l'errore
+                Log.e("FIREBASE", "Database error", error.toException())
             }
         }
 
@@ -227,28 +275,32 @@ fun StatusChangeScreen(
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(
-                painter = painterResource(
-                    if (isFull) R.drawable.baseline_air_24
-                    else R.drawable.baseline_air_24
-                ),
-                contentDescription = "Contenitore",
-                modifier = Modifier.size(96.dp)
-            )
-
-            Spacer(modifier = Modifier.height(32.dp))
-
-            Button(
-                onClick = {
-                    onStatusChange(!isFull)
-                },
-                modifier = Modifier.padding(16.dp)
-            ) {
-                Text(
-                    text = if (isFull) "CONTENITORE PIENO - Clicca per vuotare"
-                    else "CONTENITORE VUOTO - Clicca per riempire",
-                    modifier = Modifier.padding(8.dp)
+            if (!isAuthenticated) {
+                Text("Autenticazione in corso...")
+            } else {
+                Icon(
+                    painter = painterResource(
+                        if (isFull) R.drawable.baseline_air_24
+                        else R.drawable.baseline_air_24
+                    ),
+                    contentDescription = "Contenitore",
+                    modifier = Modifier.size(96.dp)
                 )
+
+                Spacer(modifier = Modifier.height(32.dp))
+
+                Button(
+                    onClick = {
+                        onStatusChange(!isFull)
+                    },
+                    modifier = Modifier.padding(16.dp)
+                ) {
+                    Text(
+                        text = if (isFull) "CONTENITORE PIENO - Clicca per vuotare"
+                        else "CONTENITORE VUOTO - Clicca per riempire",
+                        modifier = Modifier.padding(8.dp)
+                    )
+                }
             }
         }
     }
