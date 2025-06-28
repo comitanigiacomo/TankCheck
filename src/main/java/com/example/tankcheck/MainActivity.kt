@@ -6,6 +6,7 @@ import android.app.NotificationManager
 import android.content.Intent
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -21,6 +22,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -31,11 +33,24 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.example.tankcheck.ui.theme.TankCheckTheme
+import com.google.firebase.database.DataSnapshot
+import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.FirebaseDatabase
+import com.google.firebase.database.ValueEventListener
+import com.google.firebase.database.ktx.database
+import com.google.firebase.ktx.Firebase
 
 class MainActivity : ComponentActivity() {
-    private var currentStatus by mutableStateOf(false)
+    private val database = Firebase.database
+    private val statusRef = database.getReference("containerStatus")
 
     override fun onCreate(savedInstanceState: Bundle?) {
+
+        Thread.setDefaultUncaughtExceptionHandler { _, e ->
+            Log.e("CRASH", "Crash dell'app", e)
+            finish()
+        }
+
         super.onCreate(savedInstanceState)
 
         createNotificationChannel()
@@ -51,8 +66,7 @@ class MainActivity : ComponentActivity() {
                     AppContent(
                         modifier = Modifier.fillMaxSize(),
                         onStatusChange = { newStatus ->
-                            currentStatus = newStatus
-                            updateServiceStatus(newStatus)
+                            updateFirebaseStatus(newStatus)
                         }
                     )
                 }
@@ -65,13 +79,15 @@ class MainActivity : ComponentActivity() {
             val channel = NotificationChannel(
                 "container_channel",
                 "Stato Contenitore",
-                NotificationManager.IMPORTANCE_HIGH
+                NotificationManager.IMPORTANCE_DEFAULT // Cambiato da HIGH a DEFAULT
             ).apply {
                 description = "Mostra lo stato del contenitore"
                 lockscreenVisibility = Notification.VISIBILITY_PUBLIC
-                enableVibration(true)
+                enableVibration(false) // Disabilitato temporaneamente
             }
-            getSystemService(NotificationManager::class.java)?.createNotificationChannel(channel)
+
+            val manager = getSystemService(NotificationManager::class.java)
+            manager?.createNotificationChannel(channel)
         }
     }
 
@@ -80,11 +96,24 @@ class MainActivity : ComponentActivity() {
             TankCheckTheme {
                 StatusChangeScreen(
                     onStatusChange = { newStatus ->
-                        currentStatus = newStatus
-                        updateServiceStatus(newStatus)
+                        updateFirebaseStatus(newStatus)
                     }
                 )
             }
+        }
+    }
+
+    private fun updateFirebaseStatus(isFull: Boolean) {
+        try {
+            statusRef.setValue(isFull)
+                .addOnSuccessListener {
+                    updateServiceStatus(isFull)
+                }
+                .addOnFailureListener { e ->
+                    Log.e("FIREBASE", "Errore scrittura", e)
+                }
+        } catch (e: Exception) {
+            Log.e("FIREBASE", "Errore inizializzazione", e)
         }
     }
 
@@ -101,7 +130,31 @@ fun AppContent(
     modifier: Modifier = Modifier,
     onStatusChange: (Boolean) -> Unit = {}
 ) {
+    val database = Firebase.database
+    val statusRef = database.getReference("containerStatus")
+
     var isFull by remember { mutableStateOf(false) }
+
+    // Listener per gli aggiornamenti del database
+    DisposableEffect(Unit) {
+        val valueEventListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                snapshot.getValue(Boolean::class.java)?.let { status ->
+                    isFull = status
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                // Gestisci l'errore
+            }
+        }
+
+        statusRef.addValueEventListener(valueEventListener)
+
+        onDispose {
+            statusRef.removeEventListener(valueEventListener)
+        }
+    }
 
     Column(
         modifier = modifier,
@@ -121,8 +174,7 @@ fun AppContent(
 
         Button(
             onClick = {
-                isFull = !isFull
-                onStatusChange(isFull)
+                onStatusChange(!isFull)
             }
         ) {
             Text(if (isFull) "Segna come VUOTO" else "Segna come PIENO")
@@ -141,7 +193,31 @@ fun AppContent(
 fun StatusChangeScreen(
     onStatusChange: (Boolean) -> Unit
 ) {
+    val database = Firebase.database
+    val statusRef = database.getReference("containerStatus")
+
     var isFull by remember { mutableStateOf(false) }
+
+    // Listener per gli aggiornamenti del database
+    DisposableEffect(Unit) {
+        val valueEventListener = object : ValueEventListener {
+            override fun onDataChange(snapshot: DataSnapshot) {
+                snapshot.getValue(Boolean::class.java)?.let { status ->
+                    isFull = status
+                }
+            }
+
+            override fun onCancelled(error: DatabaseError) {
+                // Gestisci l'errore
+            }
+        }
+
+        statusRef.addValueEventListener(valueEventListener)
+
+        onDispose {
+            statusRef.removeEventListener(valueEventListener)
+        }
+    }
 
     Scaffold(modifier = Modifier.fillMaxSize()) { innerPadding ->
         Column(
@@ -164,8 +240,7 @@ fun StatusChangeScreen(
 
             Button(
                 onClick = {
-                    isFull = !isFull
-                    onStatusChange(isFull)
+                    onStatusChange(!isFull)
                 },
                 modifier = Modifier.padding(16.dp)
             ) {
