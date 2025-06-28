@@ -1,6 +1,7 @@
 {
   "project_info": {
     "project_number": "564182351756",
+    "firebase_url": "https://tankcheck-2c6c7-default-rtdb.europe-west1.firebasedatabase.app",
     "project_id": "tankcheck-2c6c7",
     "storage_bucket": "tankcheck-2c6c7.firebasestorage.app"
   },
