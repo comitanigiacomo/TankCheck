@@ -26,7 +26,6 @@ class StatusBarService : Service() {
         val isFull = intent?.getBooleanExtra("IS_FULL", false) ?: false
         updateNotification(isFull)
 
-        // Aggiungi listener per aggiornamenti in tempo reale
         valueEventListener = object : ValueEventListener {
             override fun onDataChange(snapshot: DataSnapshot) {
                 snapshot.getValue(Boolean::class.java)?.let { status ->
@@ -35,7 +34,6 @@ class StatusBarService : Service() {
             }
 
             override fun onCancelled(error: DatabaseError) {
-                // Gestisci l'errore
             }
         }
         statusRef.addValueEventListener(valueEventListener!!)
