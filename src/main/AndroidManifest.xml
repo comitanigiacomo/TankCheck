@@ -26,6 +26,10 @@
             </intent-filter>
         </activity>
         <service android:name=".StatusBarService" android:enabled="true" />
+        <receiver
+            android:name=".DailyResetReceiver"
+            android:enabled="true"
+            android:exported="false" />
     </application>
 
 </manifest>
