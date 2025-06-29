@@ -3,12 +3,9 @@
 TankCheck is an Android application designed to monitor and manage the status of a container (full/empty) in real-time using `Firebase` as the backend. The app features a persistent status bar notification and daily automatic reset functionality.
 
 <p align="center">
-  <img src="./public/screen.jpeg" width="300" alt="TankCheck Screenshot">
+  <img src="./public/mockup.png" width="300" alt="TankCheck Screenshot">
 </p>
 
-<p align="center">
-  <img src="./public/toggle.jpeg" width="270" alt="TankCheck Screenshot">
-</p>
 
 ## Key Features
 
