@@ -7,7 +7,7 @@ TankCheck is an Android application designed to monitor and manage the status of
 </p>
 
 <p align="center">
-  <img src="./public/toggle.jpeg" width="200" alt="TankCheck Screenshot">
+  <img src="./public/toggle.jpeg" width="270" alt="TankCheck Screenshot">
 </p>
 
 ## Key Features
